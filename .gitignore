@@ -1,0 +1,5 @@
+venv/
+*.db
+__pycache__/
+analyzer/hello
+analyzer/analyzer
