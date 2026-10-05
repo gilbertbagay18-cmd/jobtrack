@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import loc %}
+{% block content %}
+<a class="back" href="/">← Back</a>
+<article class="card b-{{ job.status }}">
+<div class="row">
+<div class="avatar" aria-hidden="true">{{ job.company[0]|upper }}</div>
+<div class="grow"><h2 class="title">{{ job.position }}</h2><div class="muted">{{ job.company }}</div></div>
+<span class="badge s-{{ job.status }}">{{ job.status }}</span>
+</div>
+<dl class="facts">
+<dt>Applied</dt><dd>{{ job.date_applied }}</dd>
+{% if job.when %}<dt>Interview</dt><dd>{{ job.when.tag }} · {{ job.when.nice }}</dd>{% endif %}
+{% if job.location %}<dt>Location</dt><dd>{{ loc(job.location) }}</dd>{% endif %}
+{% if job.job_url %}<dt>Job posting</dt><dd><a href="{{ job.job_url }}" target="_blank" rel="noopener noreferrer">Open posting ↗</a></dd>{% endif %}
+{% if job.salary %}<dt>Salary</dt><dd>{{ job.salary }}</dd>{% endif %}
+{% if job.employment_type %}<dt>Type</dt><dd>{{ job.employment_type }}</dd>{% endif %}
+{% if job.work_setup %}<dt>Setup</dt><dd>{{ job.work_setup }}</dd>{% endif %}
+{% if job.notes %}<dt>Notes</dt><dd>{{ job.notes }}</dd>{% endif %}
+{% if job.updated_at %}<dt>Updated</dt><dd>{{ job.updated_at }}</dd>{% endif %}
+</dl>
+<div class="actions">
+<a class="btn" href="/edit/{{ job.id }}">Edit</a>
+<form method="post" action="/delete/{{ job.id }}" data-confirm="Delete this application? This cannot be undone."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn red" type="submit">Delete</button></form>
+</div>
+</article>
+{% endblock %}

@@ -1,9 +1,16 @@
 {% extends "base.html" %}
+{% from "_macros.html" import loc %}
 {% block content %}
+<section class="kpis" aria-label="Summary">
+<div class="kpi"><span>Total applications</span><b>{{ total }}</b></div>
+<div class="kpi"><span>This week</span><b>{{ week }}</b></div>
+<div class="kpi"><span>This month</span><b>{{ month }}</b></div>
+<div class="kpi"><span>Interview rate</span><b>{{ rate }}%</b></div>
+</section>
 {% if upcoming %}
 <h2>⏰ Coming up</h2>
 {% for u in upcoming %}
-<div class="next"><b>{{ u.position }} · {{ u.company }}</b><small>{{ u.when.tag }} — {{ u.when.nice }}{% if u.location %} · 📍 {{ u.location }}{% endif %}</small></div>
+<div class="next"><b>{{ u.position }} · {{ u.company }}</b><small>{{ u.when.tag }} — {{ u.when.nice }}{% if u.location %} · {{ u.location }}{% endif %}</small></div>
 {% endfor %}
 {% endif %}
 <div class="stats">
@@ -13,43 +20,54 @@
 {% endfor %}
 </div>
 <form class="search" method="get">
-<input name="q" value="{{ q }}" placeholder="🔍 Search job, company, place...">
+<input type="search" name="q" value="{{ q }}" placeholder="🔍 Search job, company, place, notes" aria-label="Search applications">
 <input type="hidden" name="status" value="{{ status }}">
+<input type="hidden" name="period" value="{{ period }}">
 <input type="hidden" name="sort" value="{{ sort }}">
 <button class="btn" type="submit">Go</button>
 </form>
-<form class="tools" method="get">
+<form class="filters" method="get">
 <input type="hidden" name="q" value="{{ q }}">
-<input type="hidden" name="status" value="{{ status }}">
-<select name="sort" onchange="this.form.submit()">
+<select name="status" data-autosubmit aria-label="Filter by status">
+<option value="">All statuses</option>
+{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if status == s }}>{{ s }}</option>{% endfor %}
+</select>
+<select name="period" data-autosubmit aria-label="Filter by date applied">
+<option value="">Any date</option>
+<option value="week" {{ 'selected' if period == 'week' }}>Last 7 days</option>
+<option value="month" {{ 'selected' if period == 'month' }}>Last 30 days</option>
+</select>
+<select name="sort" data-autosubmit aria-label="Sort">
 <option value="new" {{ 'selected' if sort == 'new' }}>Sort: Newest</option>
-<option value="soon" {{ 'selected' if sort == 'soon' }}>Sort: Interview soonest</option>
+<option value="old" {{ 'selected' if sort == 'old' }}>Sort: Oldest</option>
 <option value="az" {{ 'selected' if sort == 'az' }}>Sort: Company A-Z</option>
+<option value="za" {{ 'selected' if sort == 'za' }}>Sort: Company Z-A</option>
+<option value="soon" {{ 'selected' if sort == 'soon' }}>Sort: Upcoming interview</option>
 </select>
-{% if q or status %}<a class="btn gray" href="/">Clear</a>{% endif %}
 </form>
-<p class="muted">{{ jobs|length }} result{{ '' if jobs|length == 1 else 's' }}{% if q %} for "{{ q }}"{% endif %}</p>
+<p class="muted">{{ jobs|length }} result{{ '' if jobs|length == 1 else 's' }}{% if q %} for "{{ q }}"{% endif %}{% if q or status or period %} · <a href="/">Clear</a>{% endif %}</p>
 {% for j in jobs %}
-<div class="card b-{{ j.status }}">
-<div class="row"><div class="avatar">{{ j.company[0]|upper }}</div><div><h3>{{ j.position }}</h3><div class="muted">{{ j.company }}</div></div></div>
-<form method="post" action="/status/{{ j.id }}" style="margin-top:12px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-<select name="status" class="pill s-{{ j.status }}" onchange="this.form.submit()">
-{% for s in ["Applied", "Interview", "Offer", "Rejected"] %}<option value="{{ s }}" {{ 'selected' if j.status == s }}>{{ s }}</option>{% endfor %}
-</select>
-<span class="muted"> 📅 Applied {{ j.date_applied }}</span>
-</form>
-{% if j.when %}
-<div class="when {{ j.when.cls }}">🗓️ {{ j.when.tag }} · {{ j.when.nice }}</div>
-{% if j.location %}<div class="muted" style="margin-top:6px">📍 <a href="https://www.google.com/maps/search/?api=1&query={{ j.location|urlencode }}" target="_blank" style="color:inherit">{{ j.location }}</a></div>{% endif %}
-{% endif %}
+<article class="card b-{{ j.status }}">
+<div class="row">
+<div class="avatar" aria-hidden="true">{{ j.company[0]|upper }}</div>
+<div class="grow"><h3><a href="/job/{{ j.id }}">{{ j.position }}</a></h3><div class="muted">{{ j.company }}</div></div>
+<form method="post" action="/status/{{ j.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<select name="status" class="pill s-{{ j.status }}" data-autosubmit aria-label="Change status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if j.status == s }}>{{ s }}</option>{% endfor %}</select></form>
+</div>
+<div class="chips"><span class="chip">📅 Applied {{ j.date_applied }}</span>{% if j.employment_type %}<span class="chip">{{ j.employment_type }}</span>{% endif %}{% if j.work_setup %}<span class="chip">{{ j.work_setup }}</span>{% endif %}{% if j.salary %}<span class="chip">💰 {{ j.salary }}</span>{% endif %}</div>
+{% if j.when %}<div class="when {{ j.when.cls }}">🗓️ {{ j.when.tag }} · {{ j.when.nice }}</div>{% endif %}
+{% if j.location %}<div class="muted loc">{{ loc(j.location) }}</div>{% endif %}
 {% if j.notes %}<div class="note muted">📝 {{ j.notes }}</div>{% endif %}
 <div class="actions">
-<a class="btn gray" href="/edit/{{ j.id }}">✏️ Edit</a>
-{% if j.when and j.when.days >= 0 %}<a class="btn gray" target="_blank" href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=Interview%3A+{{ j.company|urlencode }}&dates={{ j.when.start }}/{{ j.when.end }}">➕ Calendar</a>{% endif %}
-<form method="post" action="/delete/{{ j.id }}" onsubmit="return confirm('Delete this application?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn red" type="submit">🗑️ Delete</button></form>
+<a class="btn gray" href="/job/{{ j.id }}">View</a>
+<a class="btn gray" href="/edit/{{ j.id }}">Edit</a>
+<form method="post" action="/delete/{{ j.id }}" data-confirm="Delete this application? This cannot be undone."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn red" type="submit">Delete</button></form>
 </div>
-</div>
+</article>
 {% else %}
-<div class="empty"><div style="font-size:56px">📭</div><p>Nothing found.<br>Try another search or tap <b>+</b> to add one!</p></div>
+<div class="empty"><div class="big">📭</div>
+{% if total == 0 %}<p>No applications yet.</p><a class="btn" href="/add">Add your first application</a>
+{% else %}<p>No matches for these filters.</p><a class="btn gray" href="/">Clear filters</a>{% endif %}
+</div>
 {% endfor %}
 {% endblock %}

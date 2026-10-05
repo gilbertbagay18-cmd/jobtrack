@@ -17,7 +17,7 @@
 {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
 {% block content %}{% endblock %}
 </div>
-{% if session.uid %}<a class="fab" href="/add">+</a>{% endif %}
+{% if session.uid and not hide_fab %}<a class="fab" href="/add">+</a>{% endif %}
 <script>
 if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }
 let dp;

@@ -1,59 +1,49 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>{{ title }}</h2>
-<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<a class="back" href="/">← Back</a>
+<h2 class="title">{{ title }}</h2>
 <div class="finder">
-<label>🔎 Find company or place</label>
+<label for="fq">🔎 Find company or place</label>
 <div class="search"><input id="fq" placeholder="e.g. Accenture BGC"><button type="button" class="btn" id="go">Find</button></div>
 <label class="chk"><input type="checkbox" id="ph" checked> 🇵🇭 Philippines only</label>
-<div id="res"></div>
+<div id="res" aria-live="polite"></div>
 </div>
-<label>Company</label>
-<input name="company" value="{{ job.company if job else '' }}" placeholder="e.g. Accenture" required>
-<label>Position</label>
-<input name="position" value="{{ job.position if job else '' }}" placeholder="e.g. Junior Software Engineer" required>
-<label>Status</label>
-<select name="status">
-{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if job and job.status == s }}>{{ s }}</option>{% endfor %}
+<form method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label for="company">Company <span class="req">*</span></label>
+<input id="company" name="company" value="{{ job.company or '' }}" maxlength="300" required placeholder="e.g. Accenture">
+<label for="position">Position <span class="req">*</span></label>
+<input id="position" name="position" value="{{ job.position or '' }}" maxlength="300" required placeholder="e.g. Junior Software Engineer">
+<label for="status">Status <span class="req">*</span></label>
+<select id="status" name="status" required>
+{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if job.status == s }}>{{ s }}</option>{% endfor %}
 </select>
-<label>Date applied</label>
-<input type="date" name="date_applied" value="{{ job.date_applied if job else today }}">
-<label>Interview date and time</label>
-<input type="datetime-local" name="interview_at" value="{{ job.interview_at if job and job.interview_at else '' }}">
-<label>Location or meeting link</label>
-<input name="location" value="{{ job.location if job and job.location else '' }}" placeholder="e.g. BGC office or Zoom link">
-<label>Notes</label>
-<textarea name="notes" rows="4" placeholder="Contact person, next steps...">{{ job.notes if job and job.notes else '' }}</textarea>
-<button class="btn" type="submit" style="width:100%">Save</button>
+<label for="date_applied">Date applied <span class="req">*</span></label>
+<input id="date_applied" type="date" name="date_applied" value="{{ job.date_applied or '' }}" required>
+<div class="two">
+<div><label for="interview_date">Interview date</label>
+<input id="interview_date" type="date" name="interview_date" value="{{ job.interview_date or '' }}"></div>
+<div><label for="interview_time">Interview time</label>
+<input id="interview_time" type="time" name="interview_time" value="{{ job.interview_time or '' }}"></div>
+</div>
+<label for="location">Location or meeting link</label>
+<input id="location" name="location" value="{{ job.location or '' }}" maxlength="300" placeholder="e.g. BGC office or https://meet.google.com/...">
+<label for="job_url">Job posting link</label>
+<input id="job_url" type="url" name="job_url" value="{{ job.job_url or '' }}" maxlength="300" placeholder="https://...">
+<label for="salary">Salary</label>
+<input id="salary" name="salary" value="{{ job.salary or '' }}" maxlength="300" placeholder="e.g. ₱30,000 per month">
+<div class="two">
+<div><label for="employment_type">Employment type</label>
+<select id="employment_type" name="employment_type"><option value="">Select…</option>
+{% for e in employment %}<option value="{{ e }}" {{ 'selected' if job.employment_type == e }}>{{ e }}</option>{% endfor %}</select></div>
+<div><label for="work_setup">Work setup</label>
+<select id="work_setup" name="work_setup"><option value="">Select…</option>
+{% for w in setups %}<option value="{{ w }}" {{ 'selected' if job.work_setup == w }}>{{ w }}</option>{% endfor %}</select></div>
+</div>
+<label for="notes">Notes</label>
+<textarea id="notes" name="notes" rows="4" maxlength="2000" placeholder="Contact person, next steps...">{{ job.notes or '' }}</textarea>
+<button class="btn block" type="submit">Save application</button>
 <p style="text-align:center"><a href="/">Cancel</a></p>
 </form>
-<script>
-const go = document.getElementById("go");
-document.getElementById("fq").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); go.click(); } });
-go.onclick = async () => {
-  const q = document.getElementById("fq").value.trim();
-  const box = document.getElementById("res");
-  if (!q) return;
-  box.textContent = "Searching...";
-  let url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=" + encodeURIComponent(q);
-  if (document.getElementById("ph").checked) url += "&countrycodes=ph";
-  try {
-    const d = await (await fetch(url)).json();
-    box.textContent = "";
-    if (!d.length) { box.textContent = "No results. Type the details below instead."; return; }
-    d.forEach(i => {
-      const n = i.name || i.display_name.split(",")[0];
-      const b = document.createElement("button");
-      b.type = "button"; b.className = "pick";
-      b.textContent = "📍 " + n + " — " + i.display_name;
-      b.onclick = () => {
-        document.querySelector("[name=company]").value = n;
-        document.querySelector("[name=location]").value = i.display_name;
-        box.textContent = "✅ Filled in below. Add the position and save.";
-      };
-      box.appendChild(b);
-    });
-  } catch (e) { box.textContent = "Search failed. Check your internet."; }
-};
-</script>
+<script src="{{ url_for('static', filename='finder.js') }}" defer></script>
 {% endblock %}

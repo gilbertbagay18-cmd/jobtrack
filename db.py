@@ -30,7 +30,7 @@ def init_db():
         used_at TEXT,
         created_at TEXT NOT NULL)""")
     cols = [r["name"] for r in conn.execute("PRAGMA table_info(applications)")]
-    for col, typ in (("interview_at", "TEXT"), ("location", "TEXT"), ("user_id", "INTEGER")):
+    for col, typ in (("interview_at", "TEXT"), ("location", "TEXT"), ("user_id", "INTEGER"), ("job_url", "TEXT"), ("salary", "TEXT"), ("employment_type", "TEXT"), ("work_setup", "TEXT"), ("created_at", "TEXT"), ("updated_at", "TEXT")):
         if col not in cols:
             conn.execute("ALTER TABLE applications ADD COLUMN " + col + " " + typ)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_apps_user ON applications(user_id)")

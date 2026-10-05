@@ -7,3 +7,4 @@
 </button>
 </div>
 {% endmacro %}
+{% macro loc(l) %}{% if l.lower().startswith(("http://", "https://")) %}<a href="{{ l }}" target="_blank" rel="noopener noreferrer">🔗 Join meeting</a>{% else %}<a href="https://www.google.com/maps/search/?api=1&query={{ l|urlencode }}" target="_blank" rel="noopener noreferrer">📍 {{ l }}</a>{% endif %}{% endmacro %}

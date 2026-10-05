@@ -8,3 +8,11 @@ document.addEventListener("click", function (e) {
   btn.setAttribute("aria-pressed", show);
   btn.setAttribute("aria-label", show ? "Hide password" : "Show password");
 });
+
+document.addEventListener("change", function (e) {
+  if (e.target.matches("[data-autosubmit]")) e.target.form.submit();
+});
+document.addEventListener("submit", function (e) {
+  var msg = e.target.dataset.confirm;
+  if (msg && !window.confirm(msg)) e.preventDefault();
+});

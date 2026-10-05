@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 from datetime import date, datetime, timedelta, timezone
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, abort
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_limiter import Limiter
@@ -25,11 +25,13 @@ limiter = Limiter(get_remote_address, app=app, storage_uri="memory://")
 RESET_TTL = int(os.environ.get("RESET_TOKEN_EXPIRATION", "1800"))
 init_db()
 
-STATUSES = ["Applied", "Interview", "Offer", "Rejected"]
+STATUSES = ["Applied", "Interview", "Offer", "Rejected", "Withdrawn"]
 SORTS = {
     "new": "id DESC",
-    "soon": "interview_at IS NULL OR interview_at = '', interview_at ASC",
+    "old": "id ASC",
     "az": "company COLLATE NOCASE ASC",
+    "za": "company COLLATE NOCASE DESC",
+    "soon": "interview_at IS NULL OR interview_at = '', interview_at < date('now'), interview_at ASC",
 }
 
 def login_required(f):
@@ -181,21 +183,74 @@ def logout():
     flash("You are logged out. See you soon! 👋")
     return redirect(url_for("login"))
 
+EMPLOYMENT = ["Full-time", "Part-time", "Contract", "Internship"]
+SETUPS = ["On-site", "Hybrid", "Remote"]
+PERIODS = {"week": 7, "month": 30}
+COLS = ("company", "position", "status", "date_applied", "interview_at", "location",
+        "job_url", "salary", "employment_type", "work_setup", "notes")
+
+def form_context(title):
+    return {"statuses": STATUSES, "employment": EMPLOYMENT, "setups": SETUPS,
+            "title": title, "hide_fab": True}
+
+def form_values():
+    """Read the job form, clean it, and return (values, errors)."""
+    f = request.form
+    keys = ("company", "position", "status", "date_applied", "interview_date",
+            "interview_time", "location", "job_url", "salary", "employment_type",
+            "work_setup", "notes")
+    v = {k: f.get(k, "").strip()[:2000 if k == "notes" else 300] for k in keys}
+    errors = []
+    if not v["company"]:
+        errors.append("Company is required.")
+    if not v["position"]:
+        errors.append("Position is required.")
+    if v["status"] not in STATUSES:
+        errors.append("Choose a valid status.")
+    try:
+        date.fromisoformat(v["date_applied"])
+    except ValueError:
+        errors.append("Enter a valid date applied.")
+    v["interview_at"] = ""
+    if v["interview_date"]:
+        stamp = v["interview_date"] + "T" + (v["interview_time"] or "09:00")
+        try:
+            datetime.fromisoformat(stamp)
+            v["interview_at"] = stamp
+        except ValueError:
+            errors.append("Enter a valid interview date and time.")
+    if v["job_url"] and not v["job_url"].lower().startswith(("http://", "https://")):
+        errors.append("Job link must start with http:// or https://")
+    if v["employment_type"] not in EMPLOYMENT:
+        v["employment_type"] = ""
+    if v["work_setup"] not in SETUPS:
+        v["work_setup"] = ""
+    return v, errors
+
+def split_interview(row):
+    d = dict(row)
+    d["interview_date"], _, d["interview_time"] = (d.get("interview_at") or "").partition("T")
+    return d
+
 @app.route("/")
 @login_required
 def index():
     uid = session["uid"]
     q = request.args.get("q", "").strip()
     status = request.args.get("status", "")
+    period = request.args.get("period", "")
     sort = request.args.get("sort", "new")
     sql = "SELECT * FROM applications WHERE user_id = ?"
     params = [uid]
     if q:
         sql += " AND (company LIKE ? OR position LIKE ? OR notes LIKE ? OR location LIKE ?)"
         params += ["%" + q + "%"] * 4
-    if status:
+    if status in STATUSES:
         sql += " AND status = ?"
         params.append(status)
+    if period in PERIODS:
+        sql += " AND date_applied >= ?"
+        params.append((date.today() - timedelta(days=PERIODS[period])).isoformat())
     sql += " ORDER BY " + SORTS.get(sort, SORTS["new"])
     conn = get_db()
     rows = conn.execute(sql, params).fetchall()
@@ -203,50 +258,75 @@ def index():
     counts = {s: 0 for s in STATUSES}
     for r in conn.execute("SELECT status, COUNT(*) AS c FROM applications WHERE user_id = ? GROUP BY status", (uid,)):
         counts[r["status"]] = r["c"]
+    total = sum(counts.values())
+    week_ago = (date.today() - timedelta(days=7)).isoformat()
+    month_ago = (date.today() - timedelta(days=30)).isoformat()
+    week = conn.execute("SELECT COUNT(*) FROM applications WHERE user_id = ? AND date_applied >= ?", (uid, week_ago)).fetchone()[0]
+    month = conn.execute("SELECT COUNT(*) FROM applications WHERE user_id = ? AND date_applied >= ?", (uid, month_ago)).fetchone()[0]
     now = datetime.now().strftime("%Y-%m-%dT%H:%M")
     up = conn.execute("SELECT * FROM applications WHERE user_id = ? AND interview_at >= ? ORDER BY interview_at LIMIT 3", (uid, now)).fetchall()
     upcoming = [dict(r, when=when(r["interview_at"])) for r in up]
     conn.close()
-    return render_template("index.html", jobs=jobs, upcoming=upcoming,
-        counts=counts, total=sum(counts.values()), q=q, status=status, sort=sort)
+    got = counts["Interview"] + counts["Offer"]
+    rate = round(100 * got / total, 1) if total else 0
+    return render_template("index.html", jobs=jobs, upcoming=upcoming, counts=counts,
+        total=total, week=week, month=month, rate=rate, q=q, status=status,
+        period=period, sort=sort, statuses=STATUSES)
 
-def form_data():
-    f = request.form
-    return (f["company"], f["position"], f["status"], f["date_applied"],
-            f["interview_at"], f["location"], f["notes"])
+@app.route("/job/<int:job_id>")
+@login_required
+def view(job_id):
+    conn = get_db()
+    row = conn.execute("SELECT * FROM applications WHERE id = ? AND user_id = ?", (job_id, session["uid"])).fetchone()
+    conn.close()
+    if row is None:
+        abort(404)
+    return render_template("job.html", job=dict(row, when=when(row["interview_at"])))
 
 @app.route("/add", methods=["GET", "POST"])
 @login_required
 def add():
     if request.method == "POST":
+        v, errors = form_values()
+        if errors:
+            for e in errors:
+                flash(e)
+            return render_template("form.html", job=v, **form_context("Add Application"))
+        now = utcnow().isoformat(timespec="seconds")
         conn = get_db()
-        conn.execute("INSERT INTO applications (company, position, status, date_applied, interview_at, location, notes, user_id) VALUES (?,?,?,?,?,?,?,?)", form_data() + (session["uid"],))
+        conn.execute("INSERT INTO applications (" + ", ".join(COLS) + ", user_id, created_at, updated_at) VALUES (" + ", ".join("?" * (len(COLS) + 3)) + ")",
+                     [v[c] for c in COLS] + [session["uid"], now, now])
         conn.commit()
         conn.close()
         flash("Application added ✅")
         return redirect(url_for("index"))
-    return render_template("form.html", job=None, statuses=STATUSES,
-        today=date.today().isoformat(), title="Add Application")
+    job = {"status": "Applied", "date_applied": date.today().isoformat()}
+    return render_template("form.html", job=job, **form_context("Add Application"))
 
 @app.route("/edit/<int:job_id>", methods=["GET", "POST"])
 @login_required
 def edit(job_id):
     uid = session["uid"]
     conn = get_db()
-    job = conn.execute("SELECT * FROM applications WHERE id = ? AND user_id = ?", (job_id, uid)).fetchone()
-    if job is None:
+    row = conn.execute("SELECT * FROM applications WHERE id = ? AND user_id = ?", (job_id, uid)).fetchone()
+    if row is None:
         conn.close()
-        flash("Application not found.")
-        return redirect(url_for("index"))
+        abort(404)
     if request.method == "POST":
-        conn.execute("UPDATE applications SET company=?, position=?, status=?, date_applied=?, interview_at=?, location=?, notes=? WHERE id=? AND user_id=?", form_data() + (job_id, uid))
+        v, errors = form_values()
+        if errors:
+            conn.close()
+            for e in errors:
+                flash(e)
+            return render_template("form.html", job=v, **form_context("Edit Application"))
+        conn.execute("UPDATE applications SET " + ", ".join(c + " = ?" for c in COLS) + ", updated_at = ? WHERE id = ? AND user_id = ?",
+                     [v[c] for c in COLS] + [utcnow().isoformat(timespec="seconds"), job_id, uid])
         conn.commit()
         conn.close()
         flash("Changes saved ✅")
         return redirect(url_for("index"))
     conn.close()
-    return render_template("form.html", job=job, statuses=STATUSES,
-        today="", title="Edit Application")
+    return render_template("form.html", job=split_interview(row), **form_context("Edit Application"))
 
 @app.route("/status/<int:job_id>", methods=["POST"])
 @login_required
