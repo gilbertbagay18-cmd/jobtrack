@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#4f46e5">
+<title>JobTrack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+</head>
+<body>
+<header><h1><span class="logo">📋</span> Job<span class="grad">Track</span></h1><p>Land the job. Track every step. 🚀</p>{% if session.name %}<div class="who">👤 {{ session.name }} · <a href="/logout">Log out</a></div>{% endif %}<button id="install" class="btn" hidden>📲 Install app</button></header>
+<div class="box">
+{% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+{% block content %}{% endblock %}
+</div>
+{% if session.uid %}<a class="fab" href="/add">+</a>{% endif %}
+<script>
+if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }
+let dp;
+const ib = document.getElementById("install");
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); dp = e; ib.hidden = false; });
+ib.onclick = async () => { dp.prompt(); await dp.userChoice; ib.hidden = true; };
+</script>
+<script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
+</html>

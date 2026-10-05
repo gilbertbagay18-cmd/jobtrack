@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ title }}</h2>
+<form method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<div class="finder">
+<label>🔎 Find company or place</label>
+<div class="search"><input id="fq" placeholder="e.g. Accenture BGC"><button type="button" class="btn" id="go">Find</button></div>
+<label class="chk"><input type="checkbox" id="ph" checked> 🇵🇭 Philippines only</label>
+<div id="res"></div>
+</div>
+<label>Company</label>
+<input name="company" value="{{ job.company if job else '' }}" placeholder="e.g. Accenture" required>
+<label>Position</label>
+<input name="position" value="{{ job.position if job else '' }}" placeholder="e.g. Junior Software Engineer" required>
+<label>Status</label>
+<select name="status">
+{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if job and job.status == s }}>{{ s }}</option>{% endfor %}
+</select>
+<label>Date applied</label>
+<input type="date" name="date_applied" value="{{ job.date_applied if job else today }}">
+<label>Interview date and time</label>
+<input type="datetime-local" name="interview_at" value="{{ job.interview_at if job and job.interview_at else '' }}">
+<label>Location or meeting link</label>
+<input name="location" value="{{ job.location if job and job.location else '' }}" placeholder="e.g. BGC office or Zoom link">
+<label>Notes</label>
+<textarea name="notes" rows="4" placeholder="Contact person, next steps...">{{ job.notes if job and job.notes else '' }}</textarea>
+<button class="btn" type="submit" style="width:100%">Save</button>
+<p style="text-align:center"><a href="/">Cancel</a></p>
+</form>
+<script>
+const go = document.getElementById("go");
+document.getElementById("fq").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); go.click(); } });
+go.onclick = async () => {
+  const q = document.getElementById("fq").value.trim();
+  const box = document.getElementById("res");
+  if (!q) return;
+  box.textContent = "Searching...";
+  let url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&q=" + encodeURIComponent(q);
+  if (document.getElementById("ph").checked) url += "&countrycodes=ph";
+  try {
+    const d = await (await fetch(url)).json();
+    box.textContent = "";
+    if (!d.length) { box.textContent = "No results. Type the details below instead."; return; }
+    d.forEach(i => {
+      const n = i.name || i.display_name.split(",")[0];
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "pick";
+      b.textContent = "📍 " + n + " — " + i.display_name;
+      b.onclick = () => {
+        document.querySelector("[name=company]").value = n;
+        document.querySelector("[name=location]").value = i.display_name;
+        box.textContent = "✅ Filled in below. Add the position and save.";
+      };
+      box.appendChild(b);
+    });
+  } catch (e) { box.textContent = "Search failed. Check your internet."; }
+};
+</script>
+{% endblock %}

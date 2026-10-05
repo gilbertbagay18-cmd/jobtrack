@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+{% if upcoming %}
+<h2>⏰ Coming up</h2>
+{% for u in upcoming %}
+<div class="next"><b>{{ u.position }} · {{ u.company }}</b><small>{{ u.when.tag }} — {{ u.when.nice }}{% if u.location %} · 📍 {{ u.location }}{% endif %}</small></div>
+{% endfor %}
+{% endif %}
+<div class="stats">
+<a class="stat {{ 'on' if not status }}" href="/"><b>{{ total }}</b><span>All</span></a>
+{% for s in ["Applied", "Interview", "Offer", "Rejected"] %}
+<a class="stat {{ 'on' if status == s }}" href="/?status={{ s }}"><b>{{ counts[s] }}</b><span>{{ s }}</span></a>
+{% endfor %}
+</div>
+<form class="search" method="get">
+<input name="q" value="{{ q }}" placeholder="🔍 Search job, company, place...">
+<input type="hidden" name="status" value="{{ status }}">
+<input type="hidden" name="sort" value="{{ sort }}">
+<button class="btn" type="submit">Go</button>
+</form>
+<form class="tools" method="get">
+<input type="hidden" name="q" value="{{ q }}">
+<input type="hidden" name="status" value="{{ status }}">
+<select name="sort" onchange="this.form.submit()">
+<option value="new" {{ 'selected' if sort == 'new' }}>Sort: Newest</option>
+<option value="soon" {{ 'selected' if sort == 'soon' }}>Sort: Interview soonest</option>
+<option value="az" {{ 'selected' if sort == 'az' }}>Sort: Company A-Z</option>
+</select>
+{% if q or status %}<a class="btn gray" href="/">Clear</a>{% endif %}
+</form>
+<p class="muted">{{ jobs|length }} result{{ '' if jobs|length == 1 else 's' }}{% if q %} for "{{ q }}"{% endif %}</p>
+{% for j in jobs %}
+<div class="card b-{{ j.status }}">
+<div class="row"><div class="avatar">{{ j.company[0]|upper }}</div><div><h3>{{ j.position }}</h3><div class="muted">{{ j.company }}</div></div></div>
+<form method="post" action="/status/{{ j.id }}" style="margin-top:12px"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<select name="status" class="pill s-{{ j.status }}" onchange="this.form.submit()">
+{% for s in ["Applied", "Interview", "Offer", "Rejected"] %}<option value="{{ s }}" {{ 'selected' if j.status == s }}>{{ s }}</option>{% endfor %}
+</select>
+<span class="muted"> 📅 Applied {{ j.date_applied }}</span>
+</form>
+{% if j.when %}
+<div class="when {{ j.when.cls }}">🗓️ {{ j.when.tag }} · {{ j.when.nice }}</div>
+{% if j.location %}<div class="muted" style="margin-top:6px">📍 <a href="https://www.google.com/maps/search/?api=1&query={{ j.location|urlencode }}" target="_blank" style="color:inherit">{{ j.location }}</a></div>{% endif %}
+{% endif %}
+{% if j.notes %}<div class="note muted">📝 {{ j.notes }}</div>{% endif %}
+<div class="actions">
+<a class="btn gray" href="/edit/{{ j.id }}">✏️ Edit</a>
+{% if j.when and j.when.days >= 0 %}<a class="btn gray" target="_blank" href="https://calendar.google.com/calendar/render?action=TEMPLATE&text=Interview%3A+{{ j.company|urlencode }}&dates={{ j.when.start }}/{{ j.when.end }}">➕ Calendar</a>{% endif %}
+<form method="post" action="/delete/{{ j.id }}" onsubmit="return confirm('Delete this application?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn red" type="submit">🗑️ Delete</button></form>
+</div>
+</div>
+{% else %}
+<div class="empty"><div style="font-size:56px">📭</div><p>Nothing found.<br>Try another search or tap <b>+</b> to add one!</p></div>
+{% endfor %}
+{% endblock %}

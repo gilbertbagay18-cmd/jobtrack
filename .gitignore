@@ -3,3 +3,4 @@ venv/
 __pycache__/
 analyzer/hello
 analyzer/analyzer
+.env

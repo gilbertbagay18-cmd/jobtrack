@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pwfield %}
+{% block content %}
+<div class="authcard">
+<h2>{% if mode == "register" %}Create your account{% elif mode == "forgot" %}Forgot your password? 🔑{% elif mode == "reset" %}Choose a new password{% else %}Welcome back 👋{% endif %}</h2>
+{% if mode == "forgot" %}<p class="muted">Enter your email and we will send you a reset link.</p>{% endif %}
+<form method="post">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{% if mode == "register" %}<label for="name">Name</label>
+<input name="name" id="name" required autocomplete="name" placeholder="Your name">{% endif %}
+{% if mode != "reset" %}<label for="email">Email</label>
+<input type="email" name="email" id="email" required autocomplete="email" placeholder="you@email.com">{% endif %}
+{% if mode == "register" or mode == "reset" %}
+{{ pwfield("password", "pw1", "New password" if mode == "reset" else "Password", "8+ characters, letters and numbers", "new-password") }}
+{{ pwfield("confirm", "pw2", "Confirm password", "Type it again", "new-password") }}
+{% elif mode == "login" %}
+{{ pwfield("password", "pw1", "Password", "Your password", "current-password") }}
+{% endif %}
+<button class="btn" type="submit" style="width:100%">{{ {"register": "Sign up", "login": "Log in", "forgot": "Send reset link", "reset": "Save new password"}[mode] }}</button>
+</form>
+<p class="muted" style="text-align:center">
+{% if mode == "login" %}<a href="/forgot">Forgot password?</a><br>New here? <a href="/register">Create an account</a>
+{% elif mode == "register" %}Already have an account? <a href="/login">Log in</a>
+{% else %}<a href="/login">Back to log in</a>{% endif %}
+</p>
+</div>
+{% endblock %}
