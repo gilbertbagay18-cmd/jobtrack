@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pwfield %}
+{% block content %}
+<a class="back" href="/">← Back</a>
+<h2 class="title">Settings</h2>
+<section class="card set" id="account">
+<h3>Account</h3>
+<form method="post" action="/settings/account">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label for="name">Full name</label>
+<input id="name" name="name" value="{{ u['name'] }}" maxlength="80" required autocomplete="name">
+<label for="email">Email</label>
+<input id="email" type="email" name="email" value="{{ u['email'] }}" maxlength="200" required autocomplete="email">
+{{ pwfield("current", "pw-acc", "Current password (only to change email)", "Leave blank if email is unchanged", "current-password", false) }}
+<button class="btn" type="submit">Save account</button>
+</form>
+</section>
+<section class="card set" id="password">
+<h3>Security</h3>
+<form method="post" action="/settings/password">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+{{ pwfield("current", "pw-cur", "Current password", "", "current-password") }}
+{{ pwfield("password", "pw-new", "New password", "8+ characters, letters and numbers", "new-password") }}
+{{ pwfield("confirm", "pw-conf", "Confirm new password", "", "new-password") }}
+<button class="btn" type="submit">Change password</button>
+</form>
+</section>
+<section class="card set" id="preferences">
+<h3>Preferences</h3>
+<form method="post" action="/settings/preferences">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<label>Appearance</label>
+<div class="seg" role="radiogroup" aria-label="Appearance">
+{% for v, t in [("light", "☀️ Light"), ("dark", "🌙 Dark"), ("system", "💻 System")] %}
+<label class="opt"><input type="radio" name="theme" value="{{ v }}" {{ 'checked' if u['theme'] == v }}><span>{{ t }}</span></label>
+{% endfor %}
+</div>
+<label for="ds">Default status for new applications</label>
+<select id="ds" name="default_status">{% for s in statuses %}<option value="{{ s }}" {{ 'selected' if u['default_status'] == s }}>{{ s }}</option>{% endfor %}</select>
+<label for="dsort">Default sorting</label>
+<select id="dsort" name="default_sort">{% for k, t in sorts.items() %}<option value="{{ k }}" {{ 'selected' if u['default_sort'] == k }}>{{ t }}</option>{% endfor %}</select>
+<button class="btn" type="submit">Save preferences</button>
+</form>
+</section>
+<section class="card set danger" id="danger">
+<h3>Danger zone</h3>
+<div class="actions">
+<form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn gray" type="submit">Log out</button></form>
+<button class="btn red" type="button" data-open="del">Delete account…</button>
+</div>
+</section>
+<dialog id="del" aria-labelledby="del-title">
+<form method="post" action="/settings/delete">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+<h3 id="del-title">Delete your account?</h3>
+<p class="muted">This permanently deletes your account and all your applications. It cannot be undone.</p>
+<label for="confirm-del">Type DELETE to confirm</label>
+<input id="confirm-del" name="confirm" autocomplete="off" required>
+{{ pwfield("password", "pw-del", "Your password", "", "current-password") }}
+<div class="actions"><button class="btn red" type="submit">Delete forever</button><button class="btn gray" type="button" data-close>Cancel</button></div>
+</form>
+</dialog>
+{% endblock %}

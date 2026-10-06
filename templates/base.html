@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-pref="{{ theme }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,9 +10,16 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <link rel="manifest" href="/static/manifest.json">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
+<script src="{{ url_for('static', filename='theme.js') }}"></script>
 </head>
 <body>
-<header><h1><span class="logo">📋</span> Job<span class="grad">Track</span></h1><p>Land the job. Track every step. 🚀</p>{% if session.name %}<div class="who">👤 {{ session.name }} · <a href="/logout">Log out</a></div>{% endif %}<button id="install" class="btn" hidden>📲 Install app</button></header>
+<header><h1><span class="logo">📋</span> Job<span class="grad">Track</span></h1><p>Land the job. Track every step. 🚀</p>{% if session.name %}<details class="menu"><summary><span class="av">{{ session.name[0]|upper }}</span><span class="nm">{{ session.name }}</span><span aria-hidden="true">▾</span></summary>
+<div class="menu-list">
+<a href="/profile">👤 Profile</a>
+<a href="/settings">⚙️ Settings</a>
+<a href="/settings#password">🔑 Change password</a>
+<form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">🚪 Log out</button></form>
+</div></details>{% endif %}<button id="install" class="btn" hidden>📲 Install app</button></header>
 <div class="box">
 {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
 {% block content %}{% endblock %}

@@ -34,10 +34,33 @@ SORTS = {
     "soon": "interview_at IS NULL OR interview_at = '', interview_at < date('now'), interview_at ASC",
 }
 
+def start_session(uid):
+    """Keep only what the pages need in the signed session cookie."""
+    conn = get_db()
+    u = conn.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+    conn.close()
+    session["uid"] = u["id"]
+    session["name"] = u["name"]
+    session["sv"] = u["session_version"] or 0
+    session["theme"] = u["theme"] or "system"
+    session["default_status"] = u["default_status"] or "Applied"
+    session["default_sort"] = u["default_sort"] or "new"
+
+def current_user():
+    conn = get_db()
+    u = conn.execute("SELECT * FROM users WHERE id = ?", (session["uid"],)).fetchone()
+    conn.close()
+    return u
+
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         if "uid" not in session:
+            return redirect(url_for("login"))
+        u = current_user()
+        if u is None or (u["session_version"] or 0) != session.get("sv"):
+            session.clear()
+            flash("Please log in again.")
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return wrapper
@@ -99,8 +122,7 @@ def register():
             conn.execute("UPDATE applications SET user_id = ? WHERE user_id IS NULL", (uid,))
         conn.commit()
         conn.close()
-        session["uid"] = uid
-        session["name"] = name
+        start_session(uid)
         flash("Welcome, " + name + "! 🎉")
         return redirect(url_for("index"))
     return render_template("auth.html", mode="register")
@@ -114,8 +136,8 @@ def login():
         user = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
         conn.close()
         if user and check_password_hash(user["password_hash"], request.form["password"]):
-            session["uid"] = user["id"]
-            session["name"] = user["name"]
+            session.clear()
+            start_session(user["id"])
             return redirect(url_for("index"))
         flash("Wrong email or password.")
     return render_template("auth.html", mode="login")
@@ -168,7 +190,7 @@ def reset(token):
         elif err:
             flash(err)
         else:
-            conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(pw), row["user_id"]))
+            conn.execute("UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?", (generate_password_hash(pw), row["user_id"]))
             conn.execute("UPDATE password_resets SET used_at = ? WHERE user_id = ? AND used_at IS NULL", (now, row["user_id"]))
             conn.commit()
             conn.close()
@@ -177,11 +199,133 @@ def reset(token):
     conn.close()
     return render_template("auth.html", mode="reset")
 
-@app.route("/logout")
+SORT_LABELS = {"new": "Newest", "old": "Oldest", "az": "Company A-Z", "za": "Company Z-A", "soon": "Upcoming interview"}
+
+@app.route("/logout", methods=["POST"])
 def logout():
+    uid = session.get("uid")
+    if uid:
+        conn = get_db()
+        conn.execute("UPDATE users SET session_version = session_version + 1 WHERE id = ?", (uid,))
+        conn.commit()
+        conn.close()
     session.clear()
     flash("You are logged out. See you soon! 👋")
     return redirect(url_for("login"))
+
+@app.route("/profile")
+@login_required
+def profile():
+    u = current_user()
+    conn = get_db()
+    counts = {s: 0 for s in STATUSES}
+    for r in conn.execute("SELECT status, COUNT(*) AS c FROM applications WHERE user_id = ? GROUP BY status", (u["id"],)):
+        counts[r["status"]] = r["c"]
+    conn.close()
+    total = sum(counts.values())
+    rate = round(100 * (counts["Interview"] + counts["Offer"]) / total, 1) if total else 0
+    return render_template("profile.html", u=u, counts=counts, total=total, rate=rate,
+                           since=(u["created_at"] or "")[:10])
+
+@app.route("/settings")
+@login_required
+def settings():
+    return render_template("settings.html", u=current_user(), statuses=STATUSES, sorts=SORT_LABELS)
+
+@app.route("/settings/account", methods=["POST"])
+@login_required
+def settings_account():
+    u = current_user()
+    back = url_for("settings") + "#account"
+    name = request.form.get("name", "").strip()[:80]
+    email = request.form.get("email", "").strip().lower()[:200]
+    if not name or "@" not in email:
+        flash("Enter your name and a valid email.")
+        return redirect(back)
+    if email != u["email"]:
+        if not check_password_hash(u["password_hash"], request.form.get("current", "")):
+            flash("Enter your current password to change your email.")
+            return redirect(back)
+        conn = get_db()
+        taken = conn.execute("SELECT 1 FROM users WHERE email = ? AND id != ?", (email, u["id"])).fetchone()
+        conn.close()
+        if taken:
+            flash("That email is already in use.")
+            return redirect(back)
+    conn = get_db()
+    conn.execute("UPDATE users SET name = ?, email = ? WHERE id = ?", (name, email, u["id"]))
+    conn.commit()
+    conn.close()
+    session["name"] = name
+    flash("Profile updated ✅")
+    return redirect(url_for("settings"))
+
+@app.route("/settings/password", methods=["POST"])
+@limiter.limit("10 per hour", methods=["POST"])
+@login_required
+def settings_password():
+    u = current_user()
+    back = url_for("settings") + "#password"
+    f = request.form
+    new = f.get("password", "")
+    if not check_password_hash(u["password_hash"], f.get("current", "")):
+        flash("Your current password is incorrect.")
+        return redirect(back)
+    if new != f.get("confirm", ""):
+        flash("New passwords do not match.")
+        return redirect(back)
+    err = password_error(new)
+    if err:
+        flash(err)
+        return redirect(back)
+    conn = get_db()
+    conn.execute("UPDATE users SET password_hash = ?, session_version = session_version + 1 WHERE id = ?", (generate_password_hash(new), u["id"]))
+    conn.commit()
+    conn.close()
+    start_session(u["id"])
+    flash("Password changed ✅ Other devices were logged out.")
+    return redirect(url_for("settings"))
+
+@app.route("/settings/preferences", methods=["POST"])
+@login_required
+def settings_preferences():
+    f = request.form
+    theme = f.get("theme", "system")
+    status = f.get("default_status", "Applied")
+    sort = f.get("default_sort", "new")
+    if theme not in ("light", "dark", "system"):
+        theme = "system"
+    if status not in STATUSES:
+        status = "Applied"
+    if sort not in SORTS:
+        sort = "new"
+    conn = get_db()
+    conn.execute("UPDATE users SET theme = ?, default_status = ?, default_sort = ? WHERE id = ?", (theme, status, sort, session["uid"]))
+    conn.commit()
+    conn.close()
+    session["theme"], session["default_status"], session["default_sort"] = theme, status, sort
+    flash("Preferences saved ✅")
+    return redirect(url_for("settings"))
+
+@app.route("/settings/delete", methods=["POST"])
+@limiter.limit("5 per hour", methods=["POST"])
+@login_required
+def settings_delete():
+    u = current_user()
+    f = request.form
+    if f.get("confirm", "").strip() != "DELETE" or not check_password_hash(u["password_hash"], f.get("password", "")):
+        flash("Account NOT deleted. Type DELETE and enter your correct password.")
+        return redirect(url_for("settings") + "#danger")
+    conn = get_db()
+    conn.execute("DELETE FROM applications WHERE user_id = ?", (u["id"],))
+    conn.execute("DELETE FROM password_resets WHERE user_id = ?", (u["id"],))
+    conn.execute("DELETE FROM users WHERE id = ?", (u["id"],))
+    conn.commit()
+    conn.close()
+    session.clear()
+    flash("Your account and all its data were deleted.")
+    return redirect(url_for("login"))
+
 
 EMPLOYMENT = ["Full-time", "Part-time", "Contract", "Internship"]
 SETUPS = ["On-site", "Hybrid", "Remote"]
@@ -239,7 +383,7 @@ def index():
     q = request.args.get("q", "").strip()
     status = request.args.get("status", "")
     period = request.args.get("period", "")
-    sort = request.args.get("sort", "new")
+    sort = request.args.get("sort") or session.get("default_sort", "new")
     sql = "SELECT * FROM applications WHERE user_id = ?"
     params = [uid]
     if q:
@@ -300,7 +444,7 @@ def add():
         conn.close()
         flash("Application added ✅")
         return redirect(url_for("index"))
-    job = {"status": "Applied", "date_applied": date.today().isoformat()}
+    job = {"status": session.get("default_status", "Applied"), "date_applied": date.today().isoformat()}
     return render_template("form.html", job=job, **form_context("Add Application"))
 
 @app.route("/edit/<int:job_id>", methods=["GET", "POST"])
@@ -359,6 +503,8 @@ def security_headers(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["Referrer-Policy"] = "same-origin"
+    if "uid" in session and request.endpoint != "static":
+        resp.headers["Cache-Control"] = "no-store, private"
     return resp
 
 @app.errorhandler(CSRFError)
@@ -370,6 +516,10 @@ def csrf_error(e):
 def too_many(e):
     flash("Too many attempts. Please wait a bit and try again.")
     return redirect(request.referrer or url_for("login"))
+
+@app.context_processor
+def inject_theme():
+    return {"theme": session.get("theme", "system")}
 
 if __name__ == "__main__":
     app.run(debug=os.environ.get("FLASK_DEBUG") == "1")

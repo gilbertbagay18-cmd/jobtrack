@@ -16,3 +16,16 @@ document.addEventListener("submit", function (e) {
   var msg = e.target.dataset.confirm;
   if (msg && !window.confirm(msg)) e.preventDefault();
 });
+
+document.addEventListener("click", function (e) {
+  var o = e.target.closest("[data-open]");
+  if (o) document.getElementById(o.dataset.open).showModal();
+  var c = e.target.closest("[data-close]");
+  if (c) c.closest("dialog").close();
+  document.querySelectorAll("details.menu[open]").forEach(function (d) {
+    if (!d.contains(e.target)) d.open = false;
+  });
+});
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Escape") document.querySelectorAll("details.menu[open]").forEach(function (d) { d.open = false; });
+});

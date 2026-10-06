@@ -33,6 +33,10 @@ def init_db():
     for col, typ in (("interview_at", "TEXT"), ("location", "TEXT"), ("user_id", "INTEGER"), ("job_url", "TEXT"), ("salary", "TEXT"), ("employment_type", "TEXT"), ("work_setup", "TEXT"), ("created_at", "TEXT"), ("updated_at", "TEXT")):
         if col not in cols:
             conn.execute("ALTER TABLE applications ADD COLUMN " + col + " " + typ)
+    ucols = [r["name"] for r in conn.execute("PRAGMA table_info(users)")]
+    for col, typ in (("theme", "TEXT DEFAULT 'system'"), ("default_status", "TEXT DEFAULT 'Applied'"), ("default_sort", "TEXT DEFAULT 'new'"), ("session_version", "INTEGER DEFAULT 0")):
+        if col not in ucols:
+            conn.execute("ALTER TABLE users ADD COLUMN " + col + " " + typ)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_apps_user ON applications(user_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_resets_user ON password_resets(user_id)")
     conn.commit()

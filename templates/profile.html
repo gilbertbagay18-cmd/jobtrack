@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<a class="back" href="/">← Back</a>
+<section class="card">
+<div class="row">
+<div class="avatar" aria-hidden="true">{{ u["name"][0]|upper }}</div>
+<div class="grow"><h2 class="title">{{ u["name"] }}</h2><div class="muted">{{ u["email"] }}</div>{% if since %}<div class="muted">Member since {{ since }}</div>{% endif %}</div>
+</div>
+<div class="actions"><a class="btn" href="/settings#account">Edit profile</a></div>
+</section>
+<section class="kpis" aria-label="Your stats">
+<div class="kpi"><span>Applications</span><b>{{ total }}</b></div>
+<div class="kpi"><span>Interviews</span><b>{{ counts["Interview"] }}</b></div>
+<div class="kpi"><span>Offers</span><b>{{ counts["Offer"] }}</b></div>
+<div class="kpi"><span>Rejected</span><b>{{ counts["Rejected"] }}</b></div>
+</section>
+<p class="muted" style="text-align:center">Interview rate: {{ rate }}%</p>
+{% endblock %}
