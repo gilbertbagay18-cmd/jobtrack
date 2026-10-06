@@ -21,6 +21,9 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SECURE"] = os.environ.get("FLASK_ENV") == "production"
 csrf = CSRFProtect(app)
+if os.environ.get("TRUST_PROXY") == "1":
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 limiter = Limiter(get_remote_address, app=app, storage_uri="memory://")
 RESET_TTL = int(os.environ.get("RESET_TOKEN_EXPIRATION", "1800"))
 init_db()
