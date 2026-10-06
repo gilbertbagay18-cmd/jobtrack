@@ -21,10 +21,10 @@
 <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">🚪 Log out</button></form>
 </div></details>{% endif %}<button id="install" class="btn" hidden>📲 Install app</button></header>
 <div class="box">
-{% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+
 {% block content %}{% endblock %}
 </div>
-{% if session.uid and not hide_fab %}<a class="fab" href="/add">+</a>{% endif %}
+{% if session.uid and request.endpoint == 'index' %}<a class="fab" href="/add">+</a>{% endif %}
 <script>
 if ("serviceWorker" in navigator) { navigator.serviceWorker.register("/sw.js"); }
 let dp;
@@ -33,5 +33,12 @@ window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); dp = e
 ib.onclick = async () => { dp.prompt(); await dp.userChoice; ib.hidden = true; };
 </script>
 <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+<div id="toasts" aria-live="polite"></div>
+<dialog id="confirm-dialog" aria-labelledby="confirm-title">
+<h3 id="confirm-title">Are you sure?</h3>
+<p id="confirm-msg" class="muted"></p>
+<div class="actions"><button type="button" class="btn red" id="confirm-yes">Yes, continue</button><button type="button" class="btn gray" id="confirm-no">Cancel</button></div>
+</dialog>
+<script type="application/json" id="flash-data">{{ get_flashed_messages()|tojson }}</script>
 </body>
 </html>

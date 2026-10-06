@@ -521,5 +521,25 @@ def too_many(e):
 def inject_theme():
     return {"theme": session.get("theme", "system")}
 
+def error_page(code, title, msg):
+    return render_template("error.html", code=code, title=title, msg=msg), code
+
+@app.errorhandler(404)
+def not_found(e):
+    return error_page(404, "Page not found", "We could not find that page. It may have moved, or it is not yours to view.")
+
+@app.errorhandler(403)
+def forbidden(e):
+    return error_page(403, "Access denied", "You do not have permission to open this page.")
+
+@app.errorhandler(405)
+def not_allowed(e):
+    return error_page(405, "Action not available", "That action cannot be done this way. Please use the buttons in the app.")
+
+@app.errorhandler(500)
+def server_error(e):
+    app.logger.exception("Server error")
+    return error_page(500, "Something went wrong", "Something broke on our side. Your data is safe. Please try again in a moment.")
+
 if __name__ == "__main__":
     app.run(debug=os.environ.get("FLASK_DEBUG") == "1")
